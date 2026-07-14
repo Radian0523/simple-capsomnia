@@ -1,0 +1,20 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Build
+        run: swift build -c release
+      - name: Test
+        run: swift test
+      - name: Reject unsafe APIs and upstream system identifiers
+        run: |
+          ! grep -R -E 'URLSession|Network\.framework|CGEventTap|/bin/(sh|bash|zsh)' Sources
+          ! grep -R 'com.github.fuji-mak' Sources resources
