@@ -1,60 +1,165 @@
-# Capsomnia (oonishidaichi版)
+<p align="center">
+  <img src="docs/assets/app-icon.png" width="128" height="128" alt="Capsomnia app icon">
+</p>
 
-`fuji-mak/Capsomnia` を参考に、独立した権限namespaceと検証可能な状態機械で再実装している
-macOSメニューバーアプリです。
+<h1 align="center">Simple Capsomnia</h1>
 
-本人利用向けのPhase 0〜3は完成し、2026-07-14にこのMacへ最終インストール済みです。
-Core、固定helper、helper検証、macOSアダプタ、設定UI、LaunchAgent、インストール／
-アンインストールを含みます。24件の自動テスト、実機の権限検証、終了時のスリープ復元、
-アンインストール後のクリーン再インストールまで合格しています。
+<p align="center">
+  Caps Lockをスリープ抑止スイッチとして使う、シンプルで監査可能なmacOSメニューバーアプリ。
+</p>
 
-2026-07-14 の監査では、upstream の公開 package 自体は Developer ID 署名と公証を通過
-していましたが、展開後の app/helper はローカルの厳格な code-signature 検証に失敗しました。
-この設計は、その公開 package をそのまま利用せず、内部署名が最後まで維持される独立 build を
-作ることを前提にしています。
+<p align="center">
+  <a href="https://github.com/Radian0523/simple-capsomnia/actions/workflows/ci.yml"><img src="https://github.com/Radian0523/simple-capsomnia/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <img src="https://img.shields.io/badge/macOS-14%2B-black" alt="macOS 14 or later">
+  <img src="https://img.shields.io/badge/SwiftPM-6.0-F05138" alt="Swift Package Manager 6.0">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License"></a>
+</p>
 
-## 設計の結論
+## 概要
 
-- 製品名は当面 `Capsomnia` とする。
-- Bundle ID は `com.github.oonishidaichi.capsomnia` とする。
-- Caps Lock ON でシステムスリープを抑止し、OFF で通常状態へ戻す。
-- アプリ本体は一般ユーザー権限で動かす。
-- root 権限は、固定引数だけを受け付ける小さなネイティブ helper に限定する。
-- sudoers は helper の絶対パス、引数、SHA-256 digest を固定する。
-- 入力監視、キーボードイベント取得、ネットワーク通信、テレメトリは行わない。
-- 個人利用できるローカル版を先に完成させ、署名済み配布パッケージは別フェーズにする。
-- 署名後の app/helper を展開・再圧縮・xattr 削除しない。
+Capsomniaは、Caps Lockの状態とmacOSのシステムスリープ設定を同期します。
 
-## 文書
+| Caps Lock | 動作 | 表示 |
+|---|---|---|
+| ON | システムスリープを抑止 | 緑 |
+| OFF | 通常のスリープへ復元 | グレー |
+| エラー | 成功扱いせず再試行 | 赤 |
+
+- メニューバーから現在の検証済み状態を確認
+- ログイン時の自動起動
+- 蓋を閉じたときのディスプレイスリープ
+- 日本語／英語UI
+- 終了時に必ず通常スリープへ復元
+- ネットワーク通信、テレメトリ、Input Monitoringなし
+
+<p align="center">
+  <img src="docs/assets/settings-ja.jpeg" width="520" alt="Capsomnia settings window in Japanese">
+</p>
+
+> [!WARNING]
+> スリープを抑止したままMacBookの蓋を閉じると、発熱やバッテリー消費につながります。
+> バッグへ入れる前にCaps LockをOFFにし、`SleepDisabled=0`であることを確認してください。
+
+## 動作の仕組み
+
+```mermaid
+flowchart LR
+    A["Caps Lock状態"] --> B["Capsomnia<br/>一般ユーザー"]
+    B --> C["helper検証<br/>owner・mode・署名"]
+    C --> D["sudo -n<br/>3コマンド限定"]
+    D --> E["root helper"]
+    E --> F["/usr/bin/pmset"]
+    B --> G["pmset -gで結果検証"]
+```
+
+アプリは要求した状態と、`pmset -g`で確認できた実際の状態を分けて管理します。helperの実行が
+成功しても、実際の値が一致するまでは成功表示にしません。10秒ごとにdriftを検出し、必要なら
+再適用します。
+
+## 必要環境
+
+- macOS 14 Sonoma以降
+- Swift 6 toolchainを含むXcode
+- 管理者権限を持つローカルユーザー
+
+このリポジトリはソース配布です。現在、Developer ID署名・公証済みのReleaseバイナリは
+提供していません。
+
+## インストール
+
+まずソースと [`docs/PHASE3_INSTALL_PREVIEW.md`](docs/PHASE3_INSTALL_PREVIEW.md) の権限変更を
+確認してください。
+
+```sh
+git clone https://github.com/Radian0523/simple-capsomnia.git
+cd simple-capsomnia
+swift test
+./scripts/install-local.sh
+```
+
+インストール時はmacOS標準の管理者認証ダイアログが表示されます。パスワードをスクリプトへ
+渡したり、保存したりしません。
+
+設置されるファイル:
+
+| 種類 | パス |
+|---|---|
+| アプリ | `~/Applications/Capsomnia.app` |
+| LaunchAgent | `~/Library/LaunchAgents/com.github.oonishidaichi.capsomnia.plist` |
+| root helper | `/Library/PrivilegedHelperTools/com.github.oonishidaichi.capsomnia.pmset-helper` |
+| sudoers | `/etc/sudoers.d/capsomnia_oonishidaichi` |
+
+インストール後の検証:
+
+```sh
+./scripts/verify-install.sh
+./scripts/test-runtime.sh
+```
+
+`test-runtime.sh` は一時的にスリープ抑止を有効化し、SIGTERM時の復元、監査ログ、LaunchAgentの
+再起動まで確認します。終了時には `SleepDisabled=0` へ戻します。
+
+## アンインストール
+
+```sh
+./scripts/uninstall.sh
+```
+
+通常スリープを復元してから、Capsomniaが作成したアプリ、LaunchAgent、helper、sudoersだけを
+削除します。upstreamや他アプリのファイルは削除しません。
+
+## セキュリティ設計
+
+root権限の範囲を、固定された小さなhelperへ限定しています。
+
+- helperが受け付ける引数は `on`、`off`、`display-sleep` の3つだけ
+- 実行先は `/usr/bin/pmset`、引数はコンパイル時に固定
+- shell、任意コマンド、任意パスを受け付けない
+- sudoersはhelperの絶対パス、引数、SHA-256 digestを固定
+- アプリは実行前にhelperのowner、mode、symlink、署名IDを毎回検証
+- SIGINT／SIGTERMではバックグラウンドキューで同期的に通常スリープへ復元
+- URLSession、socket、Network framework、telemetry SDKを使用しない
+- Accessibility、Input Monitoring、キーロガー型APIを使用しない
+
+詳細は [`docs/SECURITY.md`](docs/SECURITY.md) と
+[`docs/DESIGN.md`](docs/DESIGN.md) を参照してください。
+
+## 検証状況
+
+本人利用版は2026-07-14に次の検証を完了しています。
+
+- 24 tests、0 failures
+- release build成功
+- app/helperのstrict code-signature verification成功
+- sudoers構文、所有権、mode、3コマンド限定を確認
+- helper ON、SIGTERM、OFF復元、LaunchAgent再起動の実機試験
+- アンインストール後の全成果物消去とクリーン再インストール
+- 日本語設定画面の実表示確認
+- GitHub Actions CI成功
+
+実測値と残る手動スモーク項目は
+[`docs/VERIFICATION_2026-07-14.md`](docs/VERIFICATION_2026-07-14.md) に記録しています。
+
+## 開発
+
+```sh
+swift build -c release
+swift test
+zsh -n scripts/*.sh scripts/*.zsh
+```
+
+主要文書:
 
 - [製品・技術設計](docs/DESIGN.md)
 - [セキュリティ設計](docs/SECURITY.md)
 - [実装計画](docs/IMPLEMENTATION_PLAN.md)
 - [受け入れテスト](docs/ACCEPTANCE_TESTS.md)
-- [5.5 実装ハンドオフ](docs/HANDOFF_5_5.md)
-- [Phase 3 インストール事前確認](docs/PHASE3_INSTALL_PREVIEW.md)
-- [2026-07-14 検証結果](docs/VERIFICATION_2026-07-14.md)
+- [ローカルインストール事前確認](docs/PHASE3_INSTALL_PREVIEW.md)
+- [実機検証結果](docs/VERIFICATION_2026-07-14.md)
 
-## 開発
+## Upstreamとライセンス
 
-```sh
-swift test
-swift build -c release
-```
-
-```sh
-./scripts/install-local.sh
-./scripts/verify-install.sh
-./scripts/test-runtime.sh
-./scripts/uninstall.sh
-```
-
-管理者処理はmacOS標準の認証ダイアログを使います。パスワードをスクリプトへ渡しません。
-現在のビルドはDeveloper ID証明書がないためad hoc署名の本人利用版です。第三者配布用の署名・
-公証済みpackageは作成していません。
-
-## 参照元とライセンス
-
-本設計は MIT License の `fuji-mak/Capsomnia` を参照しています。実装で元コードの
-全部または実質的な一部を利用する場合、元の copyright notice と MIT License を
-必ずリポジトリに残します。README にも upstream と変更点を明記します。
+このプロジェクトはMIT Licenseの
+[`fuji-mak/Capsomnia`](https://github.com/fuji-mak/Capsomnia) を参考に、独立した権限namespace、
+検証可能な状態機械、固定helperを用いて再実装しています。帰属情報は [`NOTICE.md`](NOTICE.md)、
+ライセンス本文は [`LICENSE`](LICENSE) にあります。
