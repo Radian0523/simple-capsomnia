@@ -12,6 +12,10 @@ final class StatusItemController: NSObject {
     private var state: SleepControllerState = .stopped
     private var agentActivities: [AgentActivityRecord] = []
     private var prefersVisible = true
+    private var hoverView: StatusItemHoverView?
+    private var hoverPopover: NSPopover?
+    private var hoverLabel: NSTextField?
+    private var hoverText = ""
 
     func update(state: SleepControllerState) {
         self.state = state
@@ -53,9 +57,15 @@ final class StatusItemController: NSObject {
                 let item = NSStatusBar.system.statusItem(withLength: 24)
                 item.button?.imagePosition = .imageOnly
                 statusItem = item
+                if let button = item.button {
+                    installHoverTracking(on: button)
+                }
                 rebuildMenu()
             }
         } else if let statusItem {
+            hoverPopover?.close()
+            hoverView?.removeFromSuperview()
+            hoverView = nil
             NSStatusBar.system.removeStatusItem(statusItem)
             self.statusItem = nil
         }
@@ -78,6 +88,10 @@ final class StatusItemController: NSObject {
         case .degraded, .stopped:
             button.image = Self.dot(color: .systemRed)
             button.toolTip = combinedToolTip(sleepStatus: strings.statusError)
+        }
+        hoverText = button.toolTip ?? ""
+        if hoverPopover?.isShown == true {
+            updateHoverContent()
         }
         statusItem?.length = 24
     }
@@ -172,6 +186,77 @@ final class StatusItemController: NSObject {
         return lines.joined(separator: "\n")
     }
 
+    private func installHoverTracking(on button: NSStatusBarButton) {
+        let hoverView = StatusItemHoverView()
+        hoverView.translatesAutoresizingMaskIntoConstraints = false
+        hoverView.onEnter = { [weak self] in
+            self?.showHoverPopover()
+        }
+        hoverView.onExit = { [weak self] in
+            self?.hoverPopover?.close()
+        }
+        button.addSubview(hoverView)
+        NSLayoutConstraint.activate([
+            hoverView.leadingAnchor.constraint(equalTo: button.leadingAnchor),
+            hoverView.trailingAnchor.constraint(equalTo: button.trailingAnchor),
+            hoverView.topAnchor.constraint(equalTo: button.topAnchor),
+            hoverView.bottomAnchor.constraint(equalTo: button.bottomAnchor)
+        ])
+        self.hoverView = hoverView
+    }
+
+    private func showHoverPopover() {
+        guard let button = statusItem?.button, !hoverText.isEmpty else { return }
+        updateHoverContent()
+        hoverPopover?.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+    }
+
+    private func updateHoverContent() {
+        let popover = preparedHoverPopover()
+        hoverLabel?.stringValue = hoverText
+
+        let maximumTextWidth: CGFloat = 320
+        let font = hoverLabel?.font ?? .systemFont(ofSize: 13)
+        let textBounds = (hoverText as NSString).boundingRect(
+            with: NSSize(width: maximumTextWidth, height: .greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            attributes: [.font: font]
+        )
+        let width = min(max(ceil(textBounds.width) + 24, 180), maximumTextWidth + 24)
+        let height = min(max(ceil(textBounds.height) + 24, 42), 240)
+        hoverLabel?.preferredMaxLayoutWidth = width - 24
+        popover.contentSize = NSSize(width: width, height: height)
+    }
+
+    private func preparedHoverPopover() -> NSPopover {
+        if let hoverPopover { return hoverPopover }
+
+        let label = NSTextField(wrappingLabelWithString: "")
+        label.font = .systemFont(ofSize: 13)
+        label.maximumNumberOfLines = 0
+        label.translatesAutoresizingMaskIntoConstraints = false
+
+        let contentView = NSView()
+        contentView.addSubview(label)
+        NSLayoutConstraint.activate([
+            label.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 12),
+            label.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -12),
+            label.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 12),
+            label.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -12)
+        ])
+
+        let viewController = NSViewController()
+        viewController.view = contentView
+
+        let popover = NSPopover()
+        popover.animates = false
+        popover.behavior = .applicationDefined
+        popover.contentViewController = viewController
+        hoverLabel = label
+        hoverPopover = popover
+        return popover
+    }
+
     private static func dot(color: NSColor) -> NSImage {
         let size = NSSize(width: 12, height: 12)
         let image = NSImage(size: size, flipped: false) { rect in
@@ -181,5 +266,39 @@ final class StatusItemController: NSObject {
         }
         image.isTemplate = false
         return image
+    }
+}
+
+@MainActor
+private final class StatusItemHoverView: NSView {
+    var onEnter: (() -> Void)?
+    var onExit: (() -> Void)?
+    private var hoverTrackingArea: NSTrackingArea?
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let hoverTrackingArea {
+            removeTrackingArea(hoverTrackingArea)
+        }
+        let trackingArea = NSTrackingArea(
+            rect: .zero,
+            options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(trackingArea)
+        hoverTrackingArea = trackingArea
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        onEnter?()
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        onExit?()
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        nil
     }
 }
