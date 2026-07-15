@@ -32,25 +32,38 @@ public enum AgentActivityPhase: String, Codable, Sendable {
     }
 }
 
+public struct AgentProcessIdentity: Codable, Equatable, Sendable {
+    public let processIdentifier: Int32
+    public let startTimeMicroseconds: UInt64
+
+    public init(processIdentifier: Int32, startTimeMicroseconds: UInt64) {
+        self.processIdentifier = processIdentifier
+        self.startTimeMicroseconds = startTimeMicroseconds
+    }
+}
+
 public struct AgentActivityRecord: Codable, Equatable, Identifiable, Sendable {
     public let provider: AgentProvider
     public let sessionIDHash: String
     public let projectName: String
     public let phase: AgentActivityPhase
     public let updatedAt: Date
+    public let processIdentity: AgentProcessIdentity?
 
     public init(
         provider: AgentProvider,
         sessionIDHash: String,
         projectName: String,
         phase: AgentActivityPhase,
-        updatedAt: Date
+        updatedAt: Date,
+        processIdentity: AgentProcessIdentity? = nil
     ) {
         self.provider = provider
         self.sessionIDHash = sessionIDHash
         self.projectName = projectName
         self.phase = phase
         self.updatedAt = updatedAt
+        self.processIdentity = processIdentity
     }
 
     public var id: String {

@@ -44,7 +44,8 @@ public struct AgentActivityStore: Sendable {
 
     public func loadVisible(
         at date: Date = Date(),
-        fileManager: FileManager = .default
+        fileManager: FileManager = .default,
+        processIsRunning: (AgentProcessIdentity) -> Bool = AgentProcessProbe.isRunning
     ) throws -> [AgentActivityRecord] {
         guard fileManager.fileExists(atPath: directoryURL.path) else { return [] }
         try validateDirectory(fileManager: fileManager)
@@ -67,7 +68,8 @@ public struct AgentActivityStore: Sendable {
                   let record = try? decoder.decode(AgentActivityRecord.self, from: data) else {
                 continue
             }
-            if record.isVisible(at: date) {
+            let processEnded = record.processIdentity.map { !processIsRunning($0) } ?? false
+            if record.isVisible(at: date), !processEnded {
                 records.append(record)
             } else {
                 try? fileManager.removeItem(at: file)

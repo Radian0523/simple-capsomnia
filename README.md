@@ -64,6 +64,10 @@ flowchart LR
 赤: 異常）、右側の点はAgent状態（青: 作業中、オレンジ: 承認待ち、赤: 失敗、グレー: 非稼働）を
 表示し、メニューからprovider、状態、project名を確認できます。
 
+Capsomniaは状態fileを2秒ごとに確認します。hook実行元のAgentプロセスについてPIDと起動時刻も
+照合するため、終了hookが届かない異常終了でも、元のプロセスが終了すれば表示を非稼働へ戻します。
+PIDが別のプロセスに再利用された場合も、起動時刻が異なるため同じAgentとは扱いません。
+
 対応範囲:
 
 | エージェント | 対応する実行環境 |
@@ -75,7 +79,8 @@ flowchart LR
 ローカルhookを通らないため表示されません。新しいagentへの対応には、そのagentが提供する
 lifecycle hookまたはpluginから同じreporter protocolへ変換するadapterが必要です。
 
-保存するのはprovider、project directoryの末尾名、session IDのSHA-256、状態、更新日時だけです。
+保存するのはprovider、project directoryの末尾名、session IDのSHA-256、状態、更新日時、Agentの
+PIDとプロセス起動時刻だけです。
 prompt、response、tool名、tool input/output、完全なpathは保存せず、外部送信もしません。
 状態fileは `~/Library/Application Support/Capsomnia/AgentActivity` にmode `0600`で保存されます。
 

@@ -26,7 +26,12 @@ private func runEvent() {
 
     let payload = FileHandle.standardInput.readDataToEndOfFile()
     do {
-        guard let record = try AgentEventMapper.record(provider: provider, payload: payload) else {
+        let processIdentity = AgentProcessProbe.hookOwnerIdentity()
+        guard let record = try AgentEventMapper.record(
+            provider: provider,
+            payload: payload,
+            processIdentity: processIdentity
+        ) else {
             exit(0)
         }
         let store = AgentActivityStore()

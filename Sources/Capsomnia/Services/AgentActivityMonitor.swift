@@ -4,6 +4,7 @@ import Foundation
 @MainActor
 final class AgentActivityMonitor {
     typealias Handler = ([AgentActivityRecord]) -> Void
+    private static let pollingInterval: TimeInterval = 2
 
     private let store: AgentActivityStore
     private let handler: Handler
@@ -18,7 +19,7 @@ final class AgentActivityMonitor {
     func start() {
         guard timer == nil else { return }
         refresh()
-        let timer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
+        let timer = Timer(timeInterval: Self.pollingInterval, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.refresh()
             }

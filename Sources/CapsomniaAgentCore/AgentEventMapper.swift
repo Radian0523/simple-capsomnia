@@ -13,7 +13,8 @@ public enum AgentEventMapper {
     public static func record(
         provider: AgentProvider,
         payload: Data,
-        now: Date = Date()
+        now: Date = Date(),
+        processIdentity: AgentProcessIdentity? = nil
     ) throws -> AgentActivityRecord? {
         guard payload.count <= maximumPayloadSize else {
             throw AgentEventMapperError.payloadTooLarge
@@ -39,7 +40,8 @@ public enum AgentEventMapper {
             sessionIDHash: hash(sessionID),
             projectName: projectName,
             phase: phase,
-            updatedAt: now
+            updatedAt: now,
+            processIdentity: processIdentity
         )
     }
 

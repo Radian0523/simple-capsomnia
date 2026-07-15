@@ -1,10 +1,15 @@
 import CapsomniaAgentCore
+import Darwin
 import Foundation
 import XCTest
 
 final class AgentActivityTests: XCTestCase {
     func testCodexLifecycleMapsWithoutPersistingSensitivePayload() throws {
         let now = Date(timeIntervalSince1970: 1_000)
+        let processIdentity = AgentProcessIdentity(
+            processIdentifier: 123,
+            startTimeMicroseconds: 456
+        )
         let payload = try JSONSerialization.data(withJSONObject: [
             "session_id": "session-secret",
             "cwd": "/Users/test/project-alpha",
@@ -16,13 +21,15 @@ final class AgentActivityTests: XCTestCase {
         let record = try XCTUnwrap(AgentEventMapper.record(
             provider: .codex,
             payload: payload,
-            now: now
+            now: now,
+            processIdentity: processIdentity
         ))
 
         XCTAssertEqual(record.provider, .codex)
         XCTAssertEqual(record.projectName, "project-alpha")
         XCTAssertEqual(record.phase, .working)
         XCTAssertEqual(record.updatedAt, now)
+        XCTAssertEqual(record.processIdentity, processIdentity)
         XCTAssertNotEqual(record.sessionIDHash, "session-secret")
         XCTAssertEqual(record.sessionIDHash.count, 64)
 
@@ -82,6 +89,45 @@ final class AgentActivityTests: XCTestCase {
         let mode = try FileManager.default.attributesOfItem(atPath: directory.path)[.posixPermissions]
             as? NSNumber
         XCTAssertEqual(mode?.intValue, 0o700)
+    }
+
+    func testStoreRemovesRecordWhenOriginalProcessEnds() throws {
+        let directory = temporaryDirectory().appendingPathComponent("activity")
+        let store = AgentActivityStore(directoryURL: directory)
+        let identity = AgentProcessIdentity(
+            processIdentifier: 123,
+            startTimeMicroseconds: 456
+        )
+        let record = AgentActivityRecord(
+            provider: .codex,
+            sessionIDHash: String(repeating: "c", count: 64),
+            projectName: "process-ended",
+            phase: .working,
+            updatedAt: Date(),
+            processIdentity: identity
+        )
+        try store.write(record)
+
+        XCTAssertEqual(
+            try store.loadVisible(processIsRunning: { $0 == identity }),
+            [record]
+        )
+        XCTAssertEqual(
+            try store.loadVisible(processIsRunning: { _ in false }),
+            []
+        )
+        XCTAssertEqual(try store.loadVisible(processIsRunning: { _ in true }), [])
+    }
+
+    func testProcessProbeRejectsPidReuse() throws {
+        let identity = try XCTUnwrap(AgentProcessProbe.identity(processIdentifier: getpid()))
+        XCTAssertTrue(AgentProcessProbe.isRunning(identity))
+
+        let reused = AgentProcessIdentity(
+            processIdentifier: identity.processIdentifier,
+            startTimeMicroseconds: identity.startTimeMicroseconds + 1
+        )
+        XCTAssertFalse(AgentProcessProbe.isRunning(reused))
     }
 
     private func phase(
