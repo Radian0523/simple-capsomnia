@@ -302,3 +302,57 @@ final class AgentHookConfigurationManagerTests: XCTestCase {
         return directory
     }
 }
+
+final class CodexHooksListResponseParserTests: XCTestCase {
+    func testReportsApprovalRequiredForUntrustedCapsomniaHook() throws {
+        let data = try responseData(statuses: ["untrusted", "trusted"])
+
+        XCTAssertEqual(
+            CodexHooksListResponseParser.trustState(from: data),
+            .approvalRequired
+        )
+    }
+
+    func testReportsModifiedBeforeOtherStatuses() throws {
+        let data = try responseData(statuses: ["trusted", "modified"])
+
+        XCTAssertEqual(CodexHooksListResponseParser.trustState(from: data), .modified)
+    }
+
+    func testReportsTrustedForTrustedAndManagedHooks() throws {
+        let data = try responseData(statuses: ["trusted", "managed"])
+
+        XCTAssertEqual(CodexHooksListResponseParser.trustState(from: data), .trusted)
+    }
+
+    func testIgnoresUnrelatedHooks() throws {
+        let root: [String: Any] = [
+            "id": 2,
+            "result": [
+                "data": [[
+                    "hooks": [[
+                        "command": "echo unrelated",
+                        "trustStatus": "untrusted"
+                    ]]
+                ]]
+            ]
+        ]
+        let data = try JSONSerialization.data(withJSONObject: root)
+
+        XCTAssertEqual(CodexHooksListResponseParser.trustState(from: data), .notConfigured)
+    }
+
+    private func responseData(statuses: [String]) throws -> Data {
+        let hooks = statuses.map { status in
+            [
+                "command": "CapsomniaAgentReporter event \(AgentHookConfigurationManager.protocolMarker)",
+                "trustStatus": status
+            ]
+        }
+        let root: [String: Any] = [
+            "id": 2,
+            "result": ["data": [["hooks": hooks]]]
+        ]
+        return try JSONSerialization.data(withJSONObject: root)
+    }
+}

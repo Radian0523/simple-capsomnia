@@ -18,6 +18,8 @@ final class ApplicationController: NSObject, NSApplicationDelegate {
     )
     private var lastState: SleepControllerState = .stopped
     private var lastAgentActivities: [AgentActivityRecord] = []
+    private var codexHookTrustState: CodexHookTrustState = .checking
+    private var codexHookTrustTask: Task<Void, Never>?
     private var didStartController = false
     private var terminationInProgress = false
     private var skipRestoreOnTerminate = false
@@ -40,6 +42,7 @@ final class ApplicationController: NSObject, NSApplicationDelegate {
     private lazy var agentActivityMonitor = AgentActivityMonitor { [weak self] records in
         self?.handleAgentActivity(records)
     }
+    private let codexHookTrustInspector = CodexHookTrustInspector()
 
     private var openSettingsNotification: Notification.Name {
         Notification.Name("\(configuration.identity.bundleIdentifier).openSettings")
@@ -75,6 +78,7 @@ final class ApplicationController: NSObject, NSApplicationDelegate {
 
         if AppPreferences.agentActivityEnabled {
             agentActivityMonitor.start()
+            startCodexHookTrustMonitoring()
         }
 
         if !AppPreferences.didCompleteInitialSetup {
@@ -114,6 +118,7 @@ final class ApplicationController: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         DistributedNotificationCenter.default().removeObserver(self)
         agentActivityMonitor.stop()
+        codexHookTrustTask?.cancel()
         for source in signalSources {
             source.cancel()
         }
@@ -132,6 +137,7 @@ final class ApplicationController: NSObject, NSApplicationDelegate {
         statusController.setPrefersVisible(AppPreferences.showMenuBarIcon)
         statusController.update(state: lastState)
         statusController.update(agentActivities: lastAgentActivities)
+        statusController.update(codexHookTrustState: codexHookTrustState)
     }
 
     private func handleMonitorTick(capsLockOn: Bool, lidClosed: Bool?) {
@@ -168,11 +174,36 @@ final class ApplicationController: NSObject, NSApplicationDelegate {
         settingsController?.update(agentActivities: records)
     }
 
+    private func handleCodexHookTrustState(_ state: CodexHookTrustState) {
+        codexHookTrustState = state
+        statusController.update(codexHookTrustState: state)
+        settingsController?.update(codexHookTrustState: state)
+    }
+
+    private func startCodexHookTrustMonitoring() {
+        codexHookTrustTask?.cancel()
+        handleCodexHookTrustState(.checking)
+        codexHookTrustTask = Task { [weak self] in
+            while let self, !Task.isCancelled {
+                let state = await self.codexHookTrustInspector.inspect(
+                    workingDirectoryURL: FileManager.default.homeDirectoryForCurrentUser
+                )
+                guard !Task.isCancelled else { return }
+                self.handleCodexHookTrustState(state)
+                try? await Task.sleep(nanoseconds: 30_000_000_000)
+            }
+        }
+    }
+
     private func showSettings() {
         if settingsController == nil {
             settingsController = makeSettingsController()
         }
-        settingsController?.show(state: lastState, agentActivities: lastAgentActivities)
+        settingsController?.show(
+            state: lastState,
+            agentActivities: lastAgentActivities,
+            codexHookTrustState: codexHookTrustState
+        )
     }
 
     private func makeSettingsController() -> SettingsWindowController {
@@ -234,8 +265,12 @@ final class ApplicationController: NSObject, NSApplicationDelegate {
             AppPreferences.agentActivityEnabled = enabled
             if enabled {
                 agentActivityMonitor.start()
+                startCodexHookTrustMonitoring()
             } else {
                 agentActivityMonitor.stop()
+                codexHookTrustTask?.cancel()
+                codexHookTrustTask = nil
+                handleCodexHookTrustState(.notConfigured)
             }
             logger.log("event=agent_activity_integration value=\(enabled) status=ok")
             return true

@@ -94,6 +94,11 @@ struct AppStrings {
     let agentActivityAttention: String
     let agentActivityWaiting: String
     let agentActivityFailed: String
+    let codexHookChecking: String
+    let codexHookApprovalRequired: String
+    let codexHookModified: String
+    let codexHookNotConfigured: String
+    let codexHookUnavailable: String
     let language: String
     let done: String
     let warning: String
@@ -124,6 +129,11 @@ struct AppStrings {
                 agentActivityAttention: "承認待ち",
                 agentActivityWaiting: "完了・入力待ち",
                 agentActivityFailed: "エラー",
+                codexHookChecking: "Codex 連携を確認中",
+                codexHookApprovalRequired: "Codex: hook の承認が必要です（Codex で /hooks を開く）",
+                codexHookModified: "Codex: hook が変更されています（Codex で /hooks を再確認）",
+                codexHookNotConfigured: "Codex: hook が設定されていません",
+                codexHookUnavailable: "Codex: hook の承認状態を確認できません",
                 language: "言語",
                 done: AppPreferences.didCompleteInitialSetup ? "閉じる" : "使用を開始",
                 warning: "Caps Lock ON 中はシステムスリープを抑止します。蓋を閉じる場合は発熱とバッテリー消費に注意してください。",
@@ -152,6 +162,11 @@ struct AppStrings {
                 agentActivityAttention: "Needs approval",
                 agentActivityWaiting: "Completed / waiting",
                 agentActivityFailed: "Failed",
+                codexHookChecking: "Checking Codex integration",
+                codexHookApprovalRequired: "Codex: hook approval required (open /hooks in Codex)",
+                codexHookModified: "Codex: hook changed (review it again in /hooks)",
+                codexHookNotConfigured: "Codex: hooks are not configured",
+                codexHookUnavailable: "Codex: hook approval status is unavailable",
                 language: "Language",
                 done: AppPreferences.didCompleteInitialSetup ? "Close" : "Get Started",
                 warning: "Caps Lock ON prevents system sleep. Watch temperature and battery use when the lid is closed.",
@@ -171,6 +186,17 @@ struct AppStrings {
         case .waiting: agentActivityWaiting
         case .failed: agentActivityFailed
         case .ended: agentActivityNone
+        }
+    }
+
+    func codexHookStatus(_ status: CodexHookTrustState) -> String? {
+        switch status {
+        case .checking: codexHookChecking
+        case .approvalRequired: codexHookApprovalRequired
+        case .modified: codexHookModified
+        case .notConfigured: codexHookNotConfigured
+        case .unavailable: codexHookUnavailable
+        case .trusted: nil
         }
     }
 }

@@ -14,6 +14,7 @@ final class SettingsWindowController: NSWindowController {
 
     private var currentState: SleepControllerState = .stopped
     private var currentAgentActivities: [AgentActivityRecord] = []
+    private var currentCodexHookTrustState: CodexHookTrustState = .checking
     private var titleLabel: NSTextField!
     private var statusHeadingLabel: NSTextField!
     private var statusLabel: NSTextField!
@@ -69,9 +70,14 @@ final class SettingsWindowController: NSWindowController {
         fatalError("init(coder:) has not been implemented")
     }
 
-    func show(state: SleepControllerState, agentActivities: [AgentActivityRecord]) {
+    func show(
+        state: SleepControllerState,
+        agentActivities: [AgentActivityRecord],
+        codexHookTrustState: CodexHookTrustState
+    ) {
         currentState = state
         currentAgentActivities = agentActivities
+        currentCodexHookTrustState = codexHookTrustState
         reloadStatus()
         reloadAgentStatus()
         reloadValues()
@@ -87,6 +93,11 @@ final class SettingsWindowController: NSWindowController {
 
     func update(agentActivities: [AgentActivityRecord]) {
         currentAgentActivities = agentActivities
+        reloadAgentStatus()
+    }
+
+    func update(codexHookTrustState: CodexHookTrustState) {
+        currentCodexHookTrustState = codexHookTrustState
         reloadAgentStatus()
     }
 
@@ -245,17 +256,21 @@ final class SettingsWindowController: NSWindowController {
             agentActivityStatusLabel.textColor = .secondaryLabelColor
             return
         }
-        guard !currentAgentActivities.isEmpty else {
-            agentActivityStatusLabel.stringValue = strings.agentActivityNone
-            agentActivityStatusLabel.textColor = .secondaryLabelColor
-            return
+        var lines: [String] = []
+        if let codexStatus = strings.codexHookStatus(currentCodexHookTrustState) {
+            lines.append(codexStatus)
         }
-
-        agentActivityStatusLabel.stringValue = currentAgentActivities.prefix(4).map { record in
+        lines.append(contentsOf: currentAgentActivities.prefix(4).map { record in
             "\(record.provider.displayName): \(strings.agentPhase(record.phase)) — \(record.projectName)"
-        }.joined(separator: "\n")
+        })
+        if lines.isEmpty {
+            lines.append(strings.agentActivityNone)
+        }
+        agentActivityStatusLabel.stringValue = lines.joined(separator: "\n")
 
-        if currentAgentActivities.contains(where: { $0.phase == .attention }) {
+        if currentCodexHookTrustState == .approvalRequired
+            || currentCodexHookTrustState == .modified
+            || currentAgentActivities.contains(where: { $0.phase == .attention }) {
             agentActivityStatusLabel.textColor = .systemOrange
         } else if currentAgentActivities.contains(where: { $0.phase == .failed }) {
             agentActivityStatusLabel.textColor = .systemRed

@@ -93,10 +93,14 @@ ENABLE_AGENT_ACTIVITY=1 ./scripts/install-local.sh
 ```
 
 設定は既存内容を残したまま `~/.codex/hooks.json` と `~/.claude/settings.json` へ追加されます。
-OFFまたはアンインストール時は、Capsomnia自身のmarkerを持つhookだけを削除します。Codexで
-hookの信頼確認が表示された場合は、内容が
+OFFまたはアンインストール時は、Capsomnia自身のmarkerを持つhookだけを削除します。
+
+Codexはユーザーhookを、`/hooks` 画面で明示的に信頼するまで実行しません。未承認または承認後に
+内容が変わった場合、Capsomniaは右側の点をオレンジにして、ホバー表示と設定画面に理由を表示します。
+Codexで `/hooks` を開き、内容が
 `~/Applications/Capsomnia.app/Contents/MacOS/CapsomniaAgentReporter` の実行だけであることを
-確認して許可してください。
+確認して許可してください。Capsomniaはこの信頼設定を自動で書き換えず、30秒ごとにCodexの公式
+app-serverへ状態を問い合わせ、許可後の状態を反映します。
 
 ## 必要環境
 

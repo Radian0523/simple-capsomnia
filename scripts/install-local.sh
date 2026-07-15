@@ -216,4 +216,5 @@ echo "Sudoers: $SUDOERS_PATH"
 echo "LaunchAgent: $LAUNCH_AGENT"
 if [[ "$ENABLE_AGENT_ACTIVITY" == "1" ]]; then
   echo "Agent Activity: enabled for Codex and Claude Code"
+  echo "Codex approval: review the Capsomnia reporter commands in /hooks before they can run"
 fi

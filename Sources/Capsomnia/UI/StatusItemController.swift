@@ -11,6 +11,7 @@ final class StatusItemController: NSObject {
     private var statusItem: NSStatusItem?
     private var state: SleepControllerState = .stopped
     private var agentActivities: [AgentActivityRecord] = []
+    private var codexHookTrustState: CodexHookTrustState = .checking
     private var prefersVisible = true
     private var hoverView: StatusItemHoverView?
     private var hoverPopover: NSPopover?
@@ -27,6 +28,12 @@ final class StatusItemController: NSObject {
     func update(agentActivities: [AgentActivityRecord]) {
         self.agentActivities = agentActivities.sortedForDisplay()
         syncVisibility()
+        rebuildMenu()
+        render()
+    }
+
+    func update(codexHookTrustState: CodexHookTrustState) {
+        self.codexHookTrustState = codexHookTrustState
         rebuildMenu()
         render()
     }
@@ -161,6 +168,9 @@ final class StatusItemController: NSObject {
         if agentActivities.contains(where: { $0.phase == .attention }) { return .systemOrange }
         if agentActivities.contains(where: { $0.phase == .failed }) { return .systemRed }
         if agentActivities.contains(where: { $0.phase == .working }) { return .systemBlue }
+        if codexHookTrustState == .approvalRequired || codexHookTrustState == .modified {
+            return .systemOrange
+        }
         return .secondaryLabelColor
     }
 
@@ -172,8 +182,13 @@ final class StatusItemController: NSObject {
             lines.append(strings.agentActivityDisabled)
             return lines.joined(separator: "\n")
         }
+        if let codexStatus = strings.codexHookStatus(codexHookTrustState) {
+            lines.append(codexStatus)
+        }
         guard !agentActivities.isEmpty else {
-            lines.append(strings.agentActivityNone)
+            if codexHookTrustState == .trusted {
+                lines.append(strings.agentActivityNone)
+            }
             return lines.joined(separator: "\n")
         }
 
