@@ -64,26 +64,22 @@ final class StatusItemController: NSObject {
     private func render() {
         guard let button = statusItem?.button else { return }
         let strings = AppStrings.current()
-        let agentColor = agentIndicatorColor
 
         switch state {
         case .verified(desired: .preventSleep, _):
-            button.image = Self.statusImage(sleepColor: .systemGreen, agentColor: agentColor)
+            button.image = Self.dot(color: combinedIndicatorColor(sleepColor: .systemGreen))
             button.toolTip = combinedToolTip(sleepStatus: strings.statusOn)
         case .verified(desired: .normalSleep, _):
-            button.image = Self.statusImage(
-                sleepColor: .secondaryLabelColor,
-                agentColor: agentColor
-            )
+            button.image = Self.dot(color: combinedIndicatorColor(sleepColor: .secondaryLabelColor))
             button.toolTip = combinedToolTip(sleepStatus: strings.statusOff)
         case .synchronizing:
-            button.image = Self.statusImage(sleepColor: .systemRed, agentColor: agentColor)
+            button.image = Self.dot(color: .systemRed)
             button.toolTip = combinedToolTip(sleepStatus: strings.statusSynchronizing)
         case .degraded, .stopped:
-            button.image = Self.statusImage(sleepColor: .systemRed, agentColor: agentColor)
+            button.image = Self.dot(color: .systemRed)
             button.toolTip = combinedToolTip(sleepStatus: strings.statusError)
         }
-        statusItem?.length = agentActivities.isEmpty ? 24 : 40
+        statusItem?.length = 24
     }
 
     private func rebuildMenu() {
@@ -147,12 +143,11 @@ final class StatusItemController: NSObject {
         onQuit?()
     }
 
-    private var agentIndicatorColor: NSColor? {
+    private func combinedIndicatorColor(sleepColor: NSColor) -> NSColor {
         if agentActivities.contains(where: { $0.phase == .attention }) { return .systemOrange }
         if agentActivities.contains(where: { $0.phase == .failed }) { return .systemRed }
         if agentActivities.contains(where: { $0.phase == .working }) { return .systemBlue }
-        if !agentActivities.isEmpty { return .secondaryLabelColor }
-        return nil
+        return sleepColor
     }
 
     private func combinedToolTip(sleepStatus: String) -> String {
@@ -163,31 +158,11 @@ final class StatusItemController: NSObject {
         return sleepStatus + "\n" + agentStatus + " (+\(agentActivities.count - 1))"
     }
 
-    private static func statusImage(sleepColor: NSColor, agentColor: NSColor?) -> NSImage {
-        let size = NSSize(width: agentColor == nil ? 12 : 30, height: 14)
+    private static func dot(color: NSColor) -> NSImage {
+        let size = NSSize(width: 12, height: 12)
         let image = NSImage(size: size, flipped: false) { rect in
-            sleepColor.setFill()
-            NSBezierPath(ovalIn: NSRect(x: 1, y: 2, width: 10, height: 10)).fill()
-            guard let agentColor else { return true }
-
-            let symbolConfiguration = NSImage.SymbolConfiguration(
-                pointSize: 11,
-                weight: .medium
-            ).applying(NSImage.SymbolConfiguration(paletteColors: [.labelColor]))
-            let symbol = NSImage(
-                systemSymbolName: "terminal.fill",
-                accessibilityDescription: "Agent Activity"
-            )?.withSymbolConfiguration(symbolConfiguration)
-            symbol?.draw(
-                in: NSRect(x: 14, y: 1, width: 13, height: 12),
-                from: .zero,
-                operation: .sourceOver,
-                fraction: 1,
-                respectFlipped: true,
-                hints: nil
-            )
-            agentColor.setFill()
-            NSBezierPath(ovalIn: NSRect(x: 25, y: 1, width: 5, height: 5)).fill()
+            color.setFill()
+            NSBezierPath(ovalIn: rect.insetBy(dx: 1.5, dy: 1.5)).fill()
             return true
         }
         image.isTemplate = false
