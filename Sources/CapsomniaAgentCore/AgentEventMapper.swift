@@ -67,9 +67,9 @@ public enum AgentEventMapper {
             return .ended
         case "Notification" where provider == .claude:
             switch boundedString(payload["notification_type"], maximumLength: 128) {
-            case "permission_prompt", "elicitation_dialog":
+            case "permission_prompt", "elicitation_dialog", "agent_needs_input":
                 return .attention
-            case "idle_prompt":
+            case "idle_prompt", "agent_completed":
                 return .waiting
             default:
                 return nil

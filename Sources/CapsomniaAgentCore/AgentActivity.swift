@@ -74,7 +74,9 @@ public struct AgentActivityRecord: Codable, Equatable, Identifiable, Sendable {
         guard phase != .ended else { return false }
         let maximumAge: TimeInterval
         switch phase {
-        case .working, .attention:
+        case .working:
+            maximumAge = 10 * 60
+        case .attention:
             maximumAge = 6 * 60 * 60
         case .ready, .waiting, .failed:
             maximumAge = 15 * 60

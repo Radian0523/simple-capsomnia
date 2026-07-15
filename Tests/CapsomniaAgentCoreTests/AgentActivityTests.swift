@@ -52,6 +52,22 @@ final class AgentActivityTests: XCTestCase {
             ),
             .waiting
         )
+        XCTAssertEqual(
+            try phase(
+                .claude,
+                event: "Notification",
+                extra: ["notification_type": "agent_completed"]
+            ),
+            .waiting
+        )
+        XCTAssertEqual(
+            try phase(
+                .claude,
+                event: "Notification",
+                extra: ["notification_type": "agent_needs_input"]
+            ),
+            .attention
+        )
     }
 
     func testRejectsOversizedAndMissingSessionPayloads() throws {
@@ -117,6 +133,22 @@ final class AgentActivityTests: XCTestCase {
             []
         )
         XCTAssertEqual(try store.loadVisible(processIsRunning: { _ in true }), [])
+    }
+
+    func testWorkingRecordExpiresAfterTenMinutesWithoutEvents() throws {
+        let directory = temporaryDirectory().appendingPathComponent("activity")
+        let store = AgentActivityStore(directoryURL: directory)
+        let now = Date(timeIntervalSince1970: 30_000)
+        let stale = AgentActivityRecord(
+            provider: .claude,
+            sessionIDHash: String(repeating: "d", count: 64),
+            projectName: "stale-working",
+            phase: .working,
+            updatedAt: now.addingTimeInterval(-601)
+        )
+        try store.write(stale)
+
+        XCTAssertEqual(try store.loadVisible(at: now), [])
     }
 
     func testProcessProbeRejectsPidReuse() throws {
