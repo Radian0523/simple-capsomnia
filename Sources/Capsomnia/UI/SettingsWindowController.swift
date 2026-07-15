@@ -1,4 +1,5 @@
 import AppKit
+import CapsomniaAgentCore
 import CapsomniaCore
 
 @MainActor
@@ -6,11 +7,13 @@ final class SettingsWindowController: NSWindowController {
     private let onShowMenuBarChange: (Bool) -> Void
     private let onLaunchAtLoginChange: (Bool) -> Void
     private let onDisplaySleepChange: (Bool) -> Void
+    private let onAgentActivityChange: (Bool) -> Bool
     private let onLanguageChange: (AppLanguage) -> Void
     private let onRetry: () -> Void
     private let onDone: () -> Void
 
     private var currentState: SleepControllerState = .stopped
+    private var currentAgentActivities: [AgentActivityRecord] = []
     private var titleLabel: NSTextField!
     private var statusHeadingLabel: NSTextField!
     private var statusLabel: NSTextField!
@@ -22,6 +25,10 @@ final class SettingsWindowController: NSWindowController {
     private var launchAtLoginLabel: NSTextField!
     private var displaySleepSwitch: NSSwitch!
     private var displaySleepLabel: NSTextField!
+    private var agentActivityHeadingLabel: NSTextField!
+    private var agentActivityStatusLabel: NSTextField!
+    private var agentActivitySwitch: NSSwitch!
+    private var agentActivityLabel: NSTextField!
     private var languageLabel: NSTextField!
     private var languagePopup: NSPopUpButton!
     private var retryButton: NSButton!
@@ -31,6 +38,7 @@ final class SettingsWindowController: NSWindowController {
         onShowMenuBarChange: @escaping (Bool) -> Void,
         onLaunchAtLoginChange: @escaping (Bool) -> Void,
         onDisplaySleepChange: @escaping (Bool) -> Void,
+        onAgentActivityChange: @escaping (Bool) -> Bool,
         onLanguageChange: @escaping (AppLanguage) -> Void,
         onRetry: @escaping () -> Void,
         onDone: @escaping () -> Void
@@ -38,12 +46,13 @@ final class SettingsWindowController: NSWindowController {
         self.onShowMenuBarChange = onShowMenuBarChange
         self.onLaunchAtLoginChange = onLaunchAtLoginChange
         self.onDisplaySleepChange = onDisplaySleepChange
+        self.onAgentActivityChange = onAgentActivityChange
         self.onLanguageChange = onLanguageChange
         self.onRetry = onRetry
         self.onDone = onDone
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 520, height: 440),
+            contentRect: NSRect(x: 0, y: 0, width: 520, height: 540),
             styleMask: [.titled, .closable, .miniaturizable],
             backing: .buffered,
             defer: false
@@ -60,9 +69,11 @@ final class SettingsWindowController: NSWindowController {
         fatalError("init(coder:) has not been implemented")
     }
 
-    func show(state: SleepControllerState) {
+    func show(state: SleepControllerState, agentActivities: [AgentActivityRecord]) {
         currentState = state
+        currentAgentActivities = agentActivities
         reloadStatus()
+        reloadAgentStatus()
         reloadValues()
         showWindow(nil)
         NSApp.activate(ignoringOtherApps: true)
@@ -72,6 +83,11 @@ final class SettingsWindowController: NSWindowController {
     func update(state: SleepControllerState) {
         currentState = state
         reloadStatus()
+    }
+
+    func update(agentActivities: [AgentActivityRecord]) {
+        currentAgentActivities = agentActivities
+        reloadAgentStatus()
     }
 
     func reloadText() {
@@ -85,6 +101,8 @@ final class SettingsWindowController: NSWindowController {
         showMenuBarLabel.stringValue = strings.showMenuBarIcon
         launchAtLoginLabel.stringValue = strings.launchAtLogin
         displaySleepLabel.stringValue = strings.displaySleepOnLidClose
+        agentActivityHeadingLabel.stringValue = strings.agentActivityHeading
+        agentActivityLabel.stringValue = strings.agentActivityEnabled
         languageLabel.stringValue = strings.language
         retryButton.title = strings.retry
         doneButton.title = strings.done
@@ -96,6 +114,7 @@ final class SettingsWindowController: NSWindowController {
         }
         languagePopup.selectItem(withTitle: AppPreferences.language.displayName)
         reloadStatus()
+        reloadAgentStatus()
     }
 
     private func buildContent() {
@@ -116,6 +135,11 @@ final class SettingsWindowController: NSWindowController {
         launchAtLoginLabel = NSTextField(labelWithString: "")
         displaySleepSwitch = makeSwitch(action: #selector(displaySleepChanged))
         displaySleepLabel = NSTextField(labelWithString: "")
+        agentActivityHeadingLabel = headingLabel()
+        agentActivityStatusLabel = NSTextField(wrappingLabelWithString: "")
+        agentActivityStatusLabel.font = .systemFont(ofSize: 13, weight: .medium)
+        agentActivitySwitch = makeSwitch(action: #selector(agentActivityChanged))
+        agentActivityLabel = NSTextField(labelWithString: "")
         languageLabel = NSTextField(labelWithString: "")
         languagePopup = NSPopUpButton(frame: .zero, pullsDown: false)
         languagePopup.target = self
@@ -136,6 +160,10 @@ final class SettingsWindowController: NSWindowController {
             settingRow(label: launchAtLoginLabel, control: launchAtLoginSwitch),
             settingRow(label: displaySleepLabel, control: displaySleepSwitch),
             settingRow(label: languageLabel, control: languagePopup),
+            separator(),
+            agentActivityHeadingLabel,
+            agentActivityStatusLabel,
+            settingRow(label: agentActivityLabel, control: agentActivitySwitch),
             warningLabel,
             buttonRow()
         ])
@@ -150,7 +178,8 @@ final class SettingsWindowController: NSWindowController {
             stack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -28),
             stack.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 24),
             stack.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor, constant: -24),
-            warningLabel.widthAnchor.constraint(equalTo: stack.widthAnchor)
+            warningLabel.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            agentActivityStatusLabel.widthAnchor.constraint(equalTo: stack.widthAnchor)
         ])
     }
 
@@ -204,7 +233,37 @@ final class SettingsWindowController: NSWindowController {
         showMenuBarSwitch.state = AppPreferences.showMenuBarIcon ? .on : .off
         launchAtLoginSwitch.state = AppPreferences.launchAtLogin ? .on : .off
         displaySleepSwitch.state = AppPreferences.displaySleepOnLidClose ? .on : .off
+        agentActivitySwitch.state = AppPreferences.agentActivityEnabled ? .on : .off
         languagePopup.selectItem(withTitle: AppPreferences.language.displayName)
+    }
+
+    private func reloadAgentStatus() {
+        guard isWindowLoaded else { return }
+        let strings = AppStrings.current()
+        guard AppPreferences.agentActivityEnabled else {
+            agentActivityStatusLabel.stringValue = strings.agentActivityDisabled
+            agentActivityStatusLabel.textColor = .secondaryLabelColor
+            return
+        }
+        guard !currentAgentActivities.isEmpty else {
+            agentActivityStatusLabel.stringValue = strings.agentActivityNone
+            agentActivityStatusLabel.textColor = .secondaryLabelColor
+            return
+        }
+
+        agentActivityStatusLabel.stringValue = currentAgentActivities.prefix(4).map { record in
+            "\(record.provider.displayName): \(strings.agentPhase(record.phase)) — \(record.projectName)"
+        }.joined(separator: "\n")
+
+        if currentAgentActivities.contains(where: { $0.phase == .attention }) {
+            agentActivityStatusLabel.textColor = .systemOrange
+        } else if currentAgentActivities.contains(where: { $0.phase == .failed }) {
+            agentActivityStatusLabel.textColor = .systemRed
+        } else if currentAgentActivities.contains(where: { $0.phase == .working }) {
+            agentActivityStatusLabel.textColor = .systemBlue
+        } else {
+            agentActivityStatusLabel.textColor = .labelColor
+        }
     }
 
     private func reloadStatus() {
@@ -238,6 +297,14 @@ final class SettingsWindowController: NSWindowController {
         onDisplaySleepChange(displaySleepSwitch.state == .on)
     }
 
+    @objc private func agentActivityChanged() {
+        let requested = agentActivitySwitch.state == .on
+        if !onAgentActivityChange(requested) {
+            agentActivitySwitch.state = AppPreferences.agentActivityEnabled ? .on : .off
+        }
+        reloadAgentStatus()
+    }
+
     @objc private func languageChanged() {
         guard let raw = languagePopup.selectedItem?.representedObject as? String,
               let language = AppLanguage(rawValue: raw) else { return }
@@ -253,4 +320,3 @@ final class SettingsWindowController: NSWindowController {
         close()
     }
 }
-

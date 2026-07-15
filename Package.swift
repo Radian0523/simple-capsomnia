@@ -9,12 +9,14 @@ let package = Package(
     ],
     products: [
         .executable(name: "Capsomnia", targets: ["Capsomnia"]),
+        .executable(name: "CapsomniaAgentReporter", targets: ["CapsomniaAgentReporter"]),
         .executable(
             name: "com.github.oonishidaichi.capsomnia.pmset-helper",
             targets: ["CapsomniaPmsetHelper"]
         )
     ],
     targets: [
+        .target(name: "CapsomniaAgentCore"),
         .target(name: "CapsomniaPmsetHelperCore"),
         .target(
             name: "CapsomniaCore",
@@ -22,13 +24,21 @@ let package = Package(
         ),
         .executableTarget(
             name: "Capsomnia",
-            dependencies: ["CapsomniaCore", "CapsomniaPmsetHelperCore"],
+            dependencies: [
+                "CapsomniaAgentCore",
+                "CapsomniaCore",
+                "CapsomniaPmsetHelperCore"
+            ],
             linkerSettings: [
                 .linkedFramework("AppKit"),
                 .linkedFramework("CoreGraphics"),
                 .linkedFramework("IOKit"),
                 .linkedFramework("Security")
             ]
+        ),
+        .executableTarget(
+            name: "CapsomniaAgentReporter",
+            dependencies: ["CapsomniaAgentCore"]
         ),
         .executableTarget(
             name: "CapsomniaPmsetHelper",
@@ -49,6 +59,10 @@ let package = Package(
         .testTarget(
             name: "CapsomniaAppTests",
             dependencies: ["Capsomnia"]
+        ),
+        .testTarget(
+            name: "CapsomniaAgentCoreTests",
+            dependencies: ["CapsomniaAgentCore"]
         )
     ],
     swiftLanguageModes: [.v5]

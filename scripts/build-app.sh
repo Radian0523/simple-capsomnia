@@ -2,6 +2,7 @@
 set -euo pipefail
 
 APP_NAME="Capsomnia"
+AGENT_REPORTER="CapsomniaAgentReporter"
 ROOT_DIR="${0:A:h:h}"
 INFO_PLIST="$ROOT_DIR/resources/Info.plist"
 APP_BUNDLE="$ROOT_DIR/dist/$APP_NAME.app"
@@ -28,6 +29,8 @@ fi
 
 /usr/bin/install -m 0755 "$ROOT_DIR/.build/release/$APP_NAME" \
   "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
+/usr/bin/install -m 0755 "$ROOT_DIR/.build/release/$AGENT_REPORTER" \
+  "$APP_BUNDLE/Contents/MacOS/$AGENT_REPORTER"
 /usr/bin/install -m 0644 "$INFO_PLIST" "$APP_BUNDLE/Contents/Info.plist"
 /usr/bin/install -m 0644 "$ROOT_DIR/resources/AppIcon.icns" \
   "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
@@ -41,11 +44,19 @@ fi
 /usr/bin/xattr -cr "$APP_BUNDLE"
 
 if [[ "$APP_SIGN_ID" == "-" ]]; then
+  /usr/bin/codesign --force --options runtime \
+    --identifier "$BUNDLE_ID.agent-reporter" --sign - \
+    "$APP_BUNDLE/Contents/MacOS/$AGENT_REPORTER"
   /usr/bin/codesign --force --options runtime --sign - "$APP_BUNDLE"
 else
+  /usr/bin/codesign --force --options runtime --timestamp \
+    --identifier "$BUNDLE_ID.agent-reporter" --sign "$APP_SIGN_ID" \
+    "$APP_BUNDLE/Contents/MacOS/$AGENT_REPORTER"
   /usr/bin/codesign --force --options runtime --timestamp --sign "$APP_SIGN_ID" "$APP_BUNDLE"
 fi
 
+/usr/bin/codesign --verify --all-architectures --strict --verbose=2 \
+  "$APP_BUNDLE/Contents/MacOS/$AGENT_REPORTER"
 /usr/bin/codesign --verify --all-architectures --deep --strict --verbose=2 "$APP_BUNDLE"
 SIGNED_ID="$(/usr/bin/codesign -dvv "$APP_BUNDLE" 2>&1 \
   | /usr/bin/awk -F= '$1 == "Identifier" { print $2; exit }')"

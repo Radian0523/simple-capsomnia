@@ -1,4 +1,5 @@
 import AppKit
+import CapsomniaAgentCore
 import CapsomniaCore
 import Darwin
 import Foundation
@@ -16,6 +17,7 @@ final class ApplicationController: NSObject, NSApplicationDelegate {
         label: "com.github.oonishidaichi.capsomnia.signal-termination"
     )
     private var lastState: SleepControllerState = .stopped
+    private var lastAgentActivities: [AgentActivityRecord] = []
     private var didStartController = false
     private var terminationInProgress = false
     private var skipRestoreOnTerminate = false
@@ -35,6 +37,9 @@ final class ApplicationController: NSObject, NSApplicationDelegate {
             }
         }
     )
+    private lazy var agentActivityMonitor = AgentActivityMonitor { [weak self] records in
+        self?.handleAgentActivity(records)
+    }
 
     private var openSettingsNotification: Notification.Name {
         Notification.Name("\(configuration.identity.bundleIdentifier).openSettings")
@@ -67,6 +72,10 @@ final class ApplicationController: NSObject, NSApplicationDelegate {
         }
         self.monitor = monitor
         monitor.start()
+
+        if AppPreferences.agentActivityEnabled {
+            agentActivityMonitor.start()
+        }
 
         if !AppPreferences.didCompleteInitialSetup {
             showSettings()
@@ -104,6 +113,7 @@ final class ApplicationController: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         DistributedNotificationCenter.default().removeObserver(self)
+        agentActivityMonitor.stop()
         for source in signalSources {
             source.cancel()
         }
@@ -121,6 +131,7 @@ final class ApplicationController: NSObject, NSApplicationDelegate {
         }
         statusController.setPrefersVisible(AppPreferences.showMenuBarIcon)
         statusController.update(state: lastState)
+        statusController.update(agentActivities: lastAgentActivities)
     }
 
     private func handleMonitorTick(capsLockOn: Bool, lidClosed: Bool?) {
@@ -151,11 +162,17 @@ final class ApplicationController: NSObject, NSApplicationDelegate {
         logger.log("event=state value=\(logDescription(for: state))")
     }
 
+    private func handleAgentActivity(_ records: [AgentActivityRecord]) {
+        lastAgentActivities = records
+        statusController.update(agentActivities: records)
+        settingsController?.update(agentActivities: records)
+    }
+
     private func showSettings() {
         if settingsController == nil {
             settingsController = makeSettingsController()
         }
-        settingsController?.show(state: lastState)
+        settingsController?.show(state: lastState, agentActivities: lastAgentActivities)
     }
 
     private func makeSettingsController() -> SettingsWindowController {
@@ -184,6 +201,9 @@ final class ApplicationController: NSObject, NSApplicationDelegate {
                 AppPreferences.displaySleepOnLidClose = enabled
                 self?.logger.log("event=preference key=display_sleep value=\(enabled)")
             },
+            onAgentActivityChange: { [weak self] enabled in
+                self?.setAgentActivityEnabled(enabled) ?? false
+            },
             onLanguageChange: { [weak self] language in
                 AppPreferences.language = language
                 self?.statusController.reloadText()
@@ -198,6 +218,34 @@ final class ApplicationController: NSObject, NSApplicationDelegate {
                 self?.logger.log("event=initial_setup status=complete")
             }
         )
+    }
+
+    private func setAgentActivityEnabled(_ enabled: Bool) -> Bool {
+        let reporterURL = Bundle.main.bundleURL
+            .appendingPathComponent("Contents", isDirectory: true)
+            .appendingPathComponent("MacOS", isDirectory: true)
+            .appendingPathComponent("CapsomniaAgentReporter", isDirectory: false)
+        let manager = AgentHookConfigurationManager(
+            homeDirectoryURL: FileManager.default.homeDirectoryForCurrentUser,
+            reporterURL: reporterURL
+        )
+        do {
+            try manager.setEnabled(enabled)
+            AppPreferences.agentActivityEnabled = enabled
+            if enabled {
+                agentActivityMonitor.start()
+            } else {
+                agentActivityMonitor.stop()
+            }
+            logger.log("event=agent_activity_integration value=\(enabled) status=ok")
+            return true
+        } catch {
+            logger.log(
+                "event=agent_activity_integration value=\(enabled) status=failed "
+                    + "error=\(AppLogger.sanitize(String(describing: error)))"
+            )
+            return false
+        }
     }
 
     private func retryNow() {

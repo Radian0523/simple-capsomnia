@@ -1,3 +1,4 @@
+import CapsomniaAgentCore
 import Foundation
 
 enum AppLanguage: String, CaseIterable {
@@ -21,6 +22,7 @@ enum AppPreferences {
         static let showMenuBarIcon = "showMenuBarIcon"
         static let launchAtLogin = "launchAtLogin"
         static let displaySleepOnLidClose = "displaySleepOnLidClose"
+        static let agentActivityEnabled = "agentActivityEnabled"
         static let language = "language"
         static let didCompleteInitialSetup = "didCompleteInitialSetup"
     }
@@ -30,6 +32,7 @@ enum AppPreferences {
             Key.showMenuBarIcon: true,
             Key.launchAtLogin: true,
             Key.displaySleepOnLidClose: true,
+            Key.agentActivityEnabled: false,
             Key.language: AppLanguage.systemDefault.rawValue,
             Key.didCompleteInitialSetup: false
         ])
@@ -48,6 +51,11 @@ enum AppPreferences {
     static var displaySleepOnLidClose: Bool {
         get { UserDefaults.standard.bool(forKey: Key.displaySleepOnLidClose) }
         set { UserDefaults.standard.set(newValue, forKey: Key.displaySleepOnLidClose) }
+    }
+
+    static var agentActivityEnabled: Bool {
+        get { UserDefaults.standard.bool(forKey: Key.agentActivityEnabled) }
+        set { UserDefaults.standard.set(newValue, forKey: Key.agentActivityEnabled) }
     }
 
     static var language: AppLanguage {
@@ -77,6 +85,15 @@ struct AppStrings {
     let showMenuBarIcon: String
     let launchAtLogin: String
     let displaySleepOnLidClose: String
+    let agentActivityHeading: String
+    let agentActivityEnabled: String
+    let agentActivityDisabled: String
+    let agentActivityNone: String
+    let agentActivityReady: String
+    let agentActivityWorking: String
+    let agentActivityAttention: String
+    let agentActivityWaiting: String
+    let agentActivityFailed: String
     let language: String
     let done: String
     let warning: String
@@ -98,6 +115,15 @@ struct AppStrings {
                 showMenuBarIcon: "メニューバーに状態を表示",
                 launchAtLogin: "ログイン時に起動",
                 displaySleepOnLidClose: "蓋を閉じたら画面をスリープ",
+                agentActivityHeading: "Agent Activity",
+                agentActivityEnabled: "Codex / Claude Code の状態を表示",
+                agentActivityDisabled: "エージェント連携はオフです",
+                agentActivityNone: "現在動作中のエージェントはありません",
+                agentActivityReady: "待機中",
+                agentActivityWorking: "作業中",
+                agentActivityAttention: "承認待ち",
+                agentActivityWaiting: "完了・入力待ち",
+                agentActivityFailed: "エラー",
                 language: "言語",
                 done: AppPreferences.didCompleteInitialSetup ? "閉じる" : "使用を開始",
                 warning: "Caps Lock ON 中はシステムスリープを抑止します。蓋を閉じる場合は発熱とバッテリー消費に注意してください。",
@@ -117,6 +143,15 @@ struct AppStrings {
                 showMenuBarIcon: "Show status in the menu bar",
                 launchAtLogin: "Open at login",
                 displaySleepOnLidClose: "Sleep the display when the lid closes",
+                agentActivityHeading: "Agent Activity",
+                agentActivityEnabled: "Show Codex / Claude Code activity",
+                agentActivityDisabled: "Agent integration is off",
+                agentActivityNone: "No coding agents are active",
+                agentActivityReady: "Ready",
+                agentActivityWorking: "Working",
+                agentActivityAttention: "Needs approval",
+                agentActivityWaiting: "Completed / waiting",
+                agentActivityFailed: "Failed",
                 language: "Language",
                 done: AppPreferences.didCompleteInitialSetup ? "Close" : "Get Started",
                 warning: "Caps Lock ON prevents system sleep. Watch temperature and battery use when the lid is closed.",
@@ -127,5 +162,15 @@ struct AppStrings {
             )
         }
     }
-}
 
+    func agentPhase(_ phase: AgentActivityPhase) -> String {
+        switch phase {
+        case .ready: agentActivityReady
+        case .working: agentActivityWorking
+        case .attention: agentActivityAttention
+        case .waiting: agentActivityWaiting
+        case .failed: agentActivityFailed
+        case .ended: agentActivityNone
+        }
+    }
+}

@@ -18,6 +18,8 @@ SERVICE="gui/$CURRENT_UID/$BUNDLE_ID"
 APP_BUNDLE="$HOME/Applications/$APP_NAME.app"
 LAUNCH_AGENT="$HOME/Library/LaunchAgents/$BUNDLE_ID.plist"
 LOG_DIR="$HOME/Library/Logs/$APP_NAME"
+AGENT_REPORTER="$APP_BUNDLE/Contents/MacOS/CapsomniaAgentReporter"
+ENABLE_AGENT_ACTIVITY="${ENABLE_AGENT_ACTIVITY:-0}"
 
 service_pid() {
   /bin/launchctl print "$SERVICE" 2>/dev/null \
@@ -40,6 +42,10 @@ if [[ "$BUNDLE_ID" != "com.github.oonishidaichi.capsomnia" ]]; then
 fi
 if [[ "$CURRENT_USER" == "root" || "$CURRENT_USER" == *[!A-Za-z0-9._-]* ]]; then
   echo "Unsupported installer user: $CURRENT_USER" >&2
+  exit 64
+fi
+if [[ "$ENABLE_AGENT_ACTIVITY" != "0" && "$ENABLE_AGENT_ACTIVITY" != "1" ]]; then
+  echo "ENABLE_AGENT_ACTIVITY must be 0 or 1." >&2
   exit 64
 fi
 
@@ -119,6 +125,11 @@ fi
 /bin/rm -rf "$APP_BUNDLE"
 /usr/bin/ditto "$BUILT_APP" "$APP_BUNDLE"
 /usr/bin/codesign --verify --all-architectures --deep --strict "$APP_BUNDLE"
+
+if [[ "$ENABLE_AGENT_ACTIVITY" == "1" ]]; then
+  "$AGENT_REPORTER" install-hooks
+  /usr/bin/defaults write "$BUNDLE_ID" agentActivityEnabled -bool true
+fi
 
 HELPER_DIGEST="$(/usr/bin/shasum -a 256 "$BUILT_HELPER" | /usr/bin/awk '{print $1}')"
 
@@ -203,3 +214,6 @@ echo "Helper: $HELPER_PATH"
 echo "Helper SHA-256: $HELPER_DIGEST"
 echo "Sudoers: $SUDOERS_PATH"
 echo "LaunchAgent: $LAUNCH_AGENT"
+if [[ "$ENABLE_AGENT_ACTIVITY" == "1" ]]; then
+  echo "Agent Activity: enabled for Codex and Claude Code"
+fi

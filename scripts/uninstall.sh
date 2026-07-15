@@ -13,6 +13,8 @@ CURRENT_UID="$(/usr/bin/id -u)"
 SERVICE="gui/$CURRENT_UID/$BUNDLE_ID"
 APP_BUNDLE="$HOME/Applications/$APP_NAME.app"
 LAUNCH_AGENT="$HOME/Library/LaunchAgents/$BUNDLE_ID.plist"
+AGENT_REPORTER="$APP_BUNDLE/Contents/MacOS/CapsomniaAgentReporter"
+AGENT_ACTIVITY_DIR="$HOME/Library/Application Support/$APP_NAME/AgentActivity"
 
 service_pid() {
   /bin/launchctl print "$SERVICE" 2>/dev/null \
@@ -42,6 +44,10 @@ if [[ -x "$HELPER_PATH" ]]; then
   /usr/bin/sudo -n "$HELPER_PATH" off 2>/dev/null || true
 fi
 
+if [[ -x "$AGENT_REPORTER" ]]; then
+  "$AGENT_REPORTER" remove-hooks
+fi
+
 /bin/launchctl bootout "$SERVICE" 2>/dev/null || true
 if ! wait_for_service_exit; then
   OLD_PID="$(service_pid)"
@@ -56,6 +62,8 @@ fi
 
 /bin/rm -f "$LAUNCH_AGENT"
 /bin/rm -rf "$APP_BUNDLE"
+/bin/rm -rf "$AGENT_ACTIVITY_DIR"
+/usr/bin/defaults delete "$BUNDLE_ID" agentActivityEnabled 2>/dev/null || true
 
 echo "macOS will request administrator approval to restore sleep and remove Capsomnia's privileged files."
 PRIVILEGED_UNINSTALL_COMMAND="
