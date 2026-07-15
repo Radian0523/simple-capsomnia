@@ -77,16 +77,16 @@ final class StatusItemController: NSObject {
 
         switch state {
         case .verified(desired: .preventSleep, _):
-            button.image = Self.dot(color: combinedIndicatorColor(sleepColor: .systemGreen))
+            button.image = Self.statusImage(sleepColor: .systemGreen, agentColor: agentIndicatorColor)
             button.toolTip = combinedToolTip(sleepStatus: strings.statusOn)
         case .verified(desired: .normalSleep, _):
-            button.image = Self.dot(color: combinedIndicatorColor(sleepColor: .secondaryLabelColor))
+            button.image = Self.statusImage(sleepColor: .secondaryLabelColor, agentColor: agentIndicatorColor)
             button.toolTip = combinedToolTip(sleepStatus: strings.statusOff)
         case .synchronizing:
-            button.image = Self.dot(color: .systemRed)
+            button.image = Self.statusImage(sleepColor: .systemRed, agentColor: agentIndicatorColor)
             button.toolTip = combinedToolTip(sleepStatus: strings.statusSynchronizing)
         case .degraded, .stopped:
-            button.image = Self.dot(color: .systemRed)
+            button.image = Self.statusImage(sleepColor: .systemRed, agentColor: agentIndicatorColor)
             button.toolTip = combinedToolTip(sleepStatus: strings.statusError)
         }
         hoverText = button.toolTip ?? ""
@@ -157,11 +157,11 @@ final class StatusItemController: NSObject {
         onQuit?()
     }
 
-    private func combinedIndicatorColor(sleepColor: NSColor) -> NSColor {
+    private var agentIndicatorColor: NSColor {
         if agentActivities.contains(where: { $0.phase == .attention }) { return .systemOrange }
         if agentActivities.contains(where: { $0.phase == .failed }) { return .systemRed }
         if agentActivities.contains(where: { $0.phase == .working }) { return .systemBlue }
-        return sleepColor
+        return .secondaryLabelColor
     }
 
     private func combinedToolTip(sleepStatus: String) -> String {
@@ -257,11 +257,13 @@ final class StatusItemController: NSObject {
         return popover
     }
 
-    private static func dot(color: NSColor) -> NSImage {
-        let size = NSSize(width: 12, height: 12)
-        let image = NSImage(size: size, flipped: false) { rect in
-            color.setFill()
-            NSBezierPath(ovalIn: rect.insetBy(dx: 1.5, dy: 1.5)).fill()
+    private static func statusImage(sleepColor: NSColor, agentColor: NSColor) -> NSImage {
+        let size = NSSize(width: 18, height: 10)
+        let image = NSImage(size: size, flipped: false) { _ in
+            sleepColor.setFill()
+            NSBezierPath(ovalIn: NSRect(x: 0, y: 1, width: 8, height: 8)).fill()
+            agentColor.setFill()
+            NSBezierPath(ovalIn: NSRect(x: 10, y: 1, width: 8, height: 8)).fill()
             return true
         }
         image.isTemplate = false
