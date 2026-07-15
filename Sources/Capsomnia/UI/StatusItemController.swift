@@ -151,11 +151,25 @@ final class StatusItemController: NSObject {
     }
 
     private func combinedToolTip(sleepStatus: String) -> String {
-        guard let first = agentActivities.first else { return sleepStatus }
         let strings = AppStrings.current()
-        let agentStatus = "\(first.provider.displayName): \(strings.agentPhase(first.phase))"
-        if agentActivities.count == 1 { return sleepStatus + "\n" + agentStatus }
-        return sleepStatus + "\n" + agentStatus + " (+\(agentActivities.count - 1))"
+        var lines = [sleepStatus]
+
+        guard AppPreferences.agentActivityEnabled else {
+            lines.append(strings.agentActivityDisabled)
+            return lines.joined(separator: "\n")
+        }
+        guard !agentActivities.isEmpty else {
+            lines.append(strings.agentActivityNone)
+            return lines.joined(separator: "\n")
+        }
+
+        lines.append(contentsOf: agentActivities.prefix(4).map { record in
+            "\(record.provider.displayName): \(strings.agentPhase(record.phase)) — \(record.projectName)"
+        })
+        if agentActivities.count > 4 {
+            lines.append("+\(agentActivities.count - 4)")
+        }
+        return lines.joined(separator: "\n")
     }
 
     private static func dot(color: NSColor) -> NSImage {
